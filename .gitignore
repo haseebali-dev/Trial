@@ -31,3 +31,20 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Dependencies
+node_modules/
+
+# Android-specific
+android/
+*.apk
+*.aab
+.gradle/
+build/
+local.properties
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
