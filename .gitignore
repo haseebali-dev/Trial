@@ -43,6 +43,10 @@ android/
 build/
 local.properties
 
+#IOS-specific
+ios/
+
+
 # IDE & OS files
 .vscode/
 .idea/
