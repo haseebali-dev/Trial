@@ -1,7 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using CryptoTrading.API.Data;
 using CryptoTrading.API.Configuration;
 using CryptoTrading.API.Middleware;
+using CryptoTrading.API.Interfaces;
+using CryptoTrading.API.MarketData;
+using CryptoTrading.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +35,22 @@ builder.Services.Configure<MarketDataSettings>(builder.Configuration.GetSection(
 builder.Services.Configure<AISettings>(builder.Configuration.GetSection("AI"));
 builder.Services.Configure<ScannerSettings>(builder.Configuration.GetSection("Scanner"));
 
+// Register Market Data Services
+builder.Services.AddHttpClient<BinanceMarketDataProvider>();
+builder.Services.AddHttpClient<CoinGeckoMarketDataProvider>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<BinanceMarketDataProvider>();
+builder.Services.AddScoped<CoinGeckoMarketDataProvider>();
+builder.Services.AddScoped<IMarketDataService>(sp =>
+{
+    var providers = new IMarketDataService[]
+    {
+        sp.GetRequiredService<BinanceMarketDataProvider>(),
+        sp.GetRequiredService<CoinGeckoMarketDataProvider>()
+    };
+    return new MarketDataService(providers, sp.GetRequiredService<ILogger<MarketDataService>>(), sp.GetRequiredService<IOptions<MarketDataSettings>>());
+});
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -54,7 +74,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // Commented out to avoid HTTPS issues
 
 app.UseCors("AllowFrontend");
 
@@ -63,5 +83,9 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Add explicit URL configuration - use port from environment or default to 5003
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5003";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();

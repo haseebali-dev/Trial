@@ -13,6 +13,9 @@ export interface MarketTicker {
   volume24h: number;
   change24h: number;
   timestamp: number;
+  high24h?: number;
+  low24h?: number;
+  open24h?: number;
 }
 
 export interface MarketOverview {

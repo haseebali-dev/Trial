@@ -23,8 +23,8 @@ export class ApiService {
   constructor(private http: HttpClient) {}
 
   // Health
-  health(): Observable<{ status: string; timestamp: string }> {
-    return this.http.get<{ status: string; timestamp: string }>(`${this.baseUrl}/health`);
+  health(): Observable<{ status: string }> {
+    return this.http.get<{ status: string }>(`${this.baseUrl}/market/health`);
   }
 
   // Market Data
