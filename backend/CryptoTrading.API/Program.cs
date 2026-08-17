@@ -51,6 +51,12 @@ builder.Services.AddScoped<IMarketDataService>(sp =>
     return new MarketDataService(providers, sp.GetRequiredService<ILogger<MarketDataService>>(), sp.GetRequiredService<IOptions<MarketDataSettings>>());
 });
 
+// Register Technical Analysis Services
+builder.Services.AddScoped<ITechnicalAnalysisService, TechnicalAnalysisService>();
+
+// Register Signal Generation Services
+builder.Services.AddScoped<ISignalGenerationService, SignalGenerationService>();
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

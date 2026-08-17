@@ -1,10 +1,10 @@
 import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
-import { Subject, takeUntil, switchMap, catchError, of, interval } from 'rxjs';
+import { Subject, takeUntil, catchError, of, interval, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { ChartComponent } from './components/chart.component';
-import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS } from '../../core/models/market.models';
+import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS, EmaDto, BollingerBandsDto, VwapDto, IndicatorsResponse } from '../../core/models/market.models';
 
 @Component({
   selector: 'app-market',
@@ -39,6 +39,11 @@ import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS } from '.
           [symbol]="symbol"
           [timeframe]="currentTimeframe"
           [candles]="candles"
+          [ema9]="ema9"
+          [ema21]="ema21"
+          [ema50]="ema50"
+          [bollingerBands]="bollingerBands"
+          [vwap]="vwap"
           [showToolbar]="true"
           (timeframeChange)="onTimeframeChange($event)">
         </app-chart>
@@ -274,6 +279,14 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ticker: (MarketTicker & { high24h?: number; low24h?: number; open24h?: number }) | null = null;
   candles: Candle[] = [];
+
+  // Indicators
+  ema9: EmaDto[] = [];
+  ema21: EmaDto[] = [];
+  ema50: EmaDto[] = [];
+  bollingerBands: BollingerBandsDto[] = [];
+  vwap: VwapDto[] = [];
+
   loading = false;
   error: string | null = null;
   isConnected = false;
@@ -335,32 +348,56 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading = true;
     this.error = null;
 
-    // Load ticker and candles in parallel
-    this.apiService.getTicker(this.symbol).pipe(
-      takeUntil(this.destroy$),
-      catchError(err => {
-        this.error = 'Failed to load ticker: ' + err.message;
-        return of(null);
-      })
-    ).subscribe(ticker => {
+    // Load ticker, candles, and indicators in parallel
+    forkJoin({
+      ticker: this.apiService.getTicker(this.symbol).pipe(
+        takeUntil(this.destroy$),
+        catchError(err => {
+          this.error = 'Failed to load ticker: ' + err.message;
+          return of(null);
+        })
+      ),
+      candles: this.apiService.getCandles(this.symbol, this.currentTimeframe, 500).pipe(
+        takeUntil(this.destroy$),
+        catchError(err => {
+          this.error = 'Failed to load candles: ' + err.message;
+          return of([]);
+        })
+      ),
+      indicators: this.apiService.getIndicators(this.symbol, this.currentTimeframe, 500).pipe(
+        takeUntil(this.destroy$),
+        catchError(err => {
+          console.warn('Failed to load indicators:', err.message);
+          return of(null);
+        })
+      )
+    }).subscribe(({ ticker, candles, indicators }) => {
       if (ticker) {
         this.ticker = ticker;
       }
-    });
-
-    this.apiService.getCandles(this.symbol, this.currentTimeframe, 500).pipe(
-      takeUntil(this.destroy$),
-      catchError(err => {
-        this.error = 'Failed to load candles: ' + err.message;
-        this.loading = false;
-        return of([]);
-      })
-    ).subscribe(candles => {
       this.candles = candles;
+
+      // Store indicators
+      if (indicators) {
+        this.ema9 = indicators.ema9 || [];
+        this.ema21 = indicators.ema21 || [];
+        this.ema50 = indicators.ema50 || [];
+        this.bollingerBands = indicators.bollingerBands20 || [];
+        this.vwap = indicators.vwap || [];
+      }
+
       this.loading = false;
-      // Update chart component
+
+      // Update chart component with candles and indicators
       if (this.chartComponent) {
         this.chartComponent.updateData(candles);
+        this.chartComponent.updateIndicators(
+          this.ema9,
+          this.ema21,
+          this.ema50,
+          this.bollingerBands,
+          this.vwap
+        );
       }
     });
   }

@@ -6,7 +6,20 @@ import {
   Candle,
   MarketTicker,
   MarketOverview,
-  Timeframe
+  Timeframe,
+  SmaDto,
+  EmaDto,
+  RsiDto,
+  MacdDto,
+  BollingerBandsDto,
+  AtrDto,
+  StochasticDto,
+  AdxDto,
+  ObvDto,
+  VwapDto,
+  IndicatorsResponse,
+  SignalDto,
+  SignalSummaryDto
 } from '../models/market.models';
 import { Signal } from '../../features/dashboard/signal.model';
 import { AIAnalysis } from '../../features/ai-analysis/ai-analysis.model';
@@ -38,6 +51,44 @@ export class ApiService {
 
   getMarketOverview(): Observable<MarketOverview[]> {
     return this.http.get<MarketOverview[]>(`${this.baseUrl}/market/overview`);
+  }
+
+  // Technical Analysis
+  getIndicators(symbol: string, timeframe: Timeframe, limit: number = 500): Observable<IndicatorsResponse> {
+    return this.http.get<IndicatorsResponse>(`${this.baseUrl}/indicators/${symbol}/${timeframe}?limit=${limit}`);
+  }
+
+  getSma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<SmaDto[]> {
+    return this.http.get<SmaDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/sma/${period}?limit=${limit}`);
+  }
+
+  getEma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<EmaDto[]> {
+    return this.http.get<EmaDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/ema/${period}?limit=${limit}`);
+  }
+
+  getRsi(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<RsiDto[]> {
+    return this.http.get<RsiDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/rsi?period=${period}&limit=${limit}`);
+  }
+
+  getMacd(symbol: string, timeframe: Timeframe, fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9, limit: number = 500): Observable<MacdDto[]> {
+    return this.http.get<MacdDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/macd?fastPeriod=${fastPeriod}&slowPeriod=${slowPeriod}&signalPeriod=${signalPeriod}&limit=${limit}`);
+  }
+
+  getBollingerBands(symbol: string, timeframe: Timeframe, period: number = 20, stdDev: number = 2, limit: number = 500): Observable<BollingerBandsDto[]> {
+    return this.http.get<BollingerBandsDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/bollinger?period=${period}&stdDev=${stdDev}&limit=${limit}`);
+  }
+
+  getAtr(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<AtrDto[]> {
+    return this.http.get<AtrDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/atr?period=${period}&limit=${limit}`);
+  }
+
+  getStochastic(symbol: string, timeframe: Timeframe, kPeriod: number = 14, dPeriod: number = 3, limit: number = 500): Observable<StochasticDto[]> {
+    return this.http.get<StochasticDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/stochastic?kPeriod=${kPeriod}&dPeriod=${dPeriod}&limit=${limit}`);
+  }
+
+  getSignalsSummary(symbol: string, timeframe: Timeframe, strategies?: string[]): Observable<SignalSummaryDto> {
+    const strategiesParam = strategies?.join(',') || '';
+    return this.http.get<SignalSummaryDto>(`${this.baseUrl}/signals/${symbol}/${timeframe}${strategiesParam ? `?strategies=${strategiesParam}` : ''}`);
   }
 
   // Analysis

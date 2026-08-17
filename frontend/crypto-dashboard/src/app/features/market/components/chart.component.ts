@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, Input, OnChanges, SimpleChanges, ViewChild, ElementRef, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, UTCTimestamp, ColorType, CandlestickSeries, HistogramSeries, CandlestickSeriesOptions, HistogramSeriesOptions } from 'lightweight-charts';
-import { Candle, Timeframe } from '../../../core/models/market.models';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, LineData, UTCTimestamp, ColorType, CandlestickSeries, HistogramSeries, LineSeries, CandlestickSeriesOptions, HistogramSeriesOptions, LineSeriesOptions } from 'lightweight-charts';
+import { Candle, Timeframe, EmaDto, BollingerBandsDto, VwapDto } from '../../../core/models/market.models';
 
 @Component({
   selector: 'app-chart',
@@ -17,6 +17,23 @@ import { Candle, Timeframe } from '../../../core/models/market.models';
           [class.active]="currentTimeframe === tf"
           (click)="onTimeframeChange(tf)">
           {{ tf }}
+        </button>
+      </div>
+      <div class="indicator-toggles">
+        <button class="indicator-btn" [class.active]="showEma9" (click)="toggleEma9()" title="EMA 9">
+          EMA 9
+        </button>
+        <button class="indicator-btn" [class.active]="showEma21" (click)="toggleEma21()" title="EMA 21">
+          EMA 21
+        </button>
+        <button class="indicator-btn" [class.active]="showEma50" (click)="toggleEma50()" title="EMA 50">
+          EMA 50
+        </button>
+        <button class="indicator-btn" [class.active]="showBollingerBands" (click)="toggleBollingerBands()" title="Bollinger Bands">
+          BB
+        </button>
+        <button class="indicator-btn" [class.active]="showVwap" (click)="toggleVwap()" title="VWAP">
+          VWAP
         </button>
       </div>
       <div class="chart-controls">
@@ -106,6 +123,34 @@ import { Candle, Timeframe } from '../../../core/models/market.models';
       color: #d1d4dc;
       background: #1e222d;
     }
+
+    .indicator-toggles {
+      display: flex;
+      gap: 4px;
+    }
+
+    .indicator-btn {
+      padding: 4px 8px;
+      background: transparent;
+      border: 1px solid #2a2e39;
+      border-radius: 4px;
+      color: #787b86;
+      font-size: 0.7rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .indicator-btn:hover {
+      border-color: #3d4251;
+      color: #d1d4dc;
+    }
+
+    .indicator-btn.active {
+      background: #2962ff;
+      border-color: #2962ff;
+      color: #fff;
+    }
   `]
 })
 export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
@@ -114,6 +159,16 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
   @Input() timeframe: Timeframe = '1h';
   @Input() candles: Candle[] = [];
   @Input() showToolbar = true;
+  @Input() ema9: EmaDto[] = [];
+  @Input() ema21: EmaDto[] = [];
+  @Input() ema50: EmaDto[] = [];
+  @Input() bollingerBands: BollingerBandsDto[] = [];
+  @Input() vwap: VwapDto[] = [];
+  @Input() showEma9 = false;
+  @Input() showEma21 = false;
+  @Input() showEma50 = false;
+  @Input() showBollingerBands = false;
+  @Input() showVwap = false;
   @Output() timeframeChange = new EventEmitter<Timeframe>();
 
   timeframes: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
@@ -122,6 +177,13 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
   private chart!: IChartApi;
   private candleSeries!: ISeriesApi<'Candlestick'>;
   private volumeSeries!: ISeriesApi<'Histogram'>;
+  private ema9Series!: ISeriesApi<'Line'>;
+  private ema21Series!: ISeriesApi<'Line'>;
+  private ema50Series!: ISeriesApi<'Line'>;
+  private bbUpperSeries!: ISeriesApi<'Line'>;
+  private bbMiddleSeries!: ISeriesApi<'Line'>;
+  private bbLowerSeries!: ISeriesApi<'Line'>;
+  private vwapSeries!: ISeriesApi<'Line'>;
   private crosshairEnabled = true;
 
   ngOnInit(): void {
@@ -228,6 +290,80 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
       priceLineVisible: false,
     } as unknown as HistogramSeriesOptions);
 
+    // Create EMA 9 series (blue)
+    this.ema9Series = this.chart.addSeries(LineSeries, {
+      color: '#2962ff',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'EMA 9',
+    } as LineSeriesOptions);
+
+    // Create EMA 21 series (orange)
+    this.ema21Series = this.chart.addSeries(LineSeries, {
+      color: '#f39c12',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'EMA 21',
+    } as LineSeriesOptions);
+
+    // Create EMA 50 series (purple)
+    this.ema50Series = this.chart.addSeries(LineSeries, {
+      color: '#9b59b6',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'EMA 50',
+    } as LineSeriesOptions);
+
+    // Create Bollinger Bands Upper (gray dashed)
+    this.bbUpperSeries = this.chart.addSeries(LineSeries, {
+      color: '#7f8c8d',
+      lineWidth: 1,
+      lineStyle: 2, // Dashed
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'BB Upper',
+    } as LineSeriesOptions);
+
+    // Create Bollinger Bands Middle (gray)
+    this.bbMiddleSeries = this.chart.addSeries(LineSeries, {
+      color: '#95a5a6',
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'BB Middle',
+    } as LineSeriesOptions);
+
+    // Create Bollinger Bands Lower (gray dashed)
+    this.bbLowerSeries = this.chart.addSeries(LineSeries, {
+      color: '#7f8c8d',
+      lineWidth: 1,
+      lineStyle: 2, // Dashed
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'BB Lower',
+    } as LineSeriesOptions);
+
+    // Create VWAP series (yellow)
+    this.vwapSeries = this.chart.addSeries(LineSeries, {
+      color: '#f1c40f',
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      title: 'VWAP',
+    } as LineSeriesOptions);
+
+    // Initially hide all indicator series
+    this.ema9Series.applyOptions({ visible: false });
+    this.ema21Series.applyOptions({ visible: false });
+    this.ema50Series.applyOptions({ visible: false });
+    this.bbUpperSeries.applyOptions({ visible: false });
+    this.bbMiddleSeries.applyOptions({ visible: false });
+    this.bbLowerSeries.applyOptions({ visible: false });
+    this.vwapSeries.applyOptions({ visible: false });
+
     // Subscribe to crosshair move for tooltip data
     this.chart.subscribeCrosshairMove((param) => {
       if (param.time && param.seriesData.get(this.candleSeries)) {
@@ -269,8 +405,88 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
     this.candleSeries.setData(candleData);
     this.volumeSeries.setData(volumeData);
 
+    // Update indicator series if data is available
+    this.updateIndicatorSeries();
+
     // Fit content on first load
     this.chart.timeScale().fitContent();
+  }
+
+  private updateIndicatorSeries(): void {
+    // EMA 9
+    if (this.ema9.length > 0) {
+      const ema9Data: LineData[] = this.ema9.map(e => ({
+        time: e.timestamp / 1000 as UTCTimestamp,
+        value: e.value,
+      }));
+      this.ema9Series.setData(ema9Data);
+      this.ema9Series.applyOptions({ visible: this.showEma9 });
+    } else {
+      this.ema9Series.applyOptions({ visible: false });
+    }
+
+    // EMA 21
+    if (this.ema21.length > 0) {
+      const ema21Data: LineData[] = this.ema21.map(e => ({
+        time: e.timestamp / 1000 as UTCTimestamp,
+        value: e.value,
+      }));
+      this.ema21Series.setData(ema21Data);
+      this.ema21Series.applyOptions({ visible: this.showEma21 });
+    } else {
+      this.ema21Series.applyOptions({ visible: false });
+    }
+
+    // EMA 50
+    if (this.ema50.length > 0) {
+      const ema50Data: LineData[] = this.ema50.map(e => ({
+        time: e.timestamp / 1000 as UTCTimestamp,
+        value: e.value,
+      }));
+      this.ema50Series.setData(ema50Data);
+      this.ema50Series.applyOptions({ visible: this.showEma50 });
+    } else {
+      this.ema50Series.applyOptions({ visible: false });
+    }
+
+    // Bollinger Bands
+    if (this.bollingerBands.length > 0) {
+      const bbUpperData: LineData[] = this.bollingerBands.map(b => ({
+        time: b.timestamp / 1000 as UTCTimestamp,
+        value: b.upper,
+      }));
+      const bbMiddleData: LineData[] = this.bollingerBands.map(b => ({
+        time: b.timestamp / 1000 as UTCTimestamp,
+        value: b.middle,
+      }));
+      const bbLowerData: LineData[] = this.bollingerBands.map(b => ({
+        time: b.timestamp / 1000 as UTCTimestamp,
+        value: b.lower,
+      }));
+      this.bbUpperSeries.setData(bbUpperData);
+      this.bbMiddleSeries.setData(bbMiddleData);
+      this.bbLowerSeries.setData(bbLowerData);
+      const bbVisible = this.showBollingerBands;
+      this.bbUpperSeries.applyOptions({ visible: bbVisible });
+      this.bbMiddleSeries.applyOptions({ visible: bbVisible });
+      this.bbLowerSeries.applyOptions({ visible: bbVisible });
+    } else {
+      this.bbUpperSeries.applyOptions({ visible: false });
+      this.bbMiddleSeries.applyOptions({ visible: false });
+      this.bbLowerSeries.applyOptions({ visible: false });
+    }
+
+    // VWAP
+    if (this.vwap.length > 0) {
+      const vwapData: LineData[] = this.vwap.map(v => ({
+        time: v.timestamp / 1000 as UTCTimestamp,
+        value: v.value,
+      }));
+      this.vwapSeries.setData(vwapData);
+      this.vwapSeries.applyOptions({ visible: this.showVwap });
+    } else {
+      this.vwapSeries.applyOptions({ visible: false });
+    }
   }
 
   onTimeframeChange(tf: Timeframe): void {
@@ -289,9 +505,63 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
     });
   }
 
+  // Indicator toggle methods
+  toggleEma9(): void {
+    this.showEma9 = !this.showEma9;
+    if (this.ema9.length > 0) {
+      this.ema9Series.applyOptions({ visible: this.showEma9 });
+    }
+  }
+
+  toggleEma21(): void {
+    this.showEma21 = !this.showEma21;
+    if (this.ema21.length > 0) {
+      this.ema21Series.applyOptions({ visible: this.showEma21 });
+    }
+  }
+
+  toggleEma50(): void {
+    this.showEma50 = !this.showEma50;
+    if (this.ema50.length > 0) {
+      this.ema50Series.applyOptions({ visible: this.showEma50 });
+    }
+  }
+
+  toggleBollingerBands(): void {
+    this.showBollingerBands = !this.showBollingerBands;
+    if (this.bollingerBands.length > 0) {
+      this.bbUpperSeries.applyOptions({ visible: this.showBollingerBands });
+      this.bbMiddleSeries.applyOptions({ visible: this.showBollingerBands });
+      this.bbLowerSeries.applyOptions({ visible: this.showBollingerBands });
+    }
+  }
+
+  toggleVwap(): void {
+    this.showVwap = !this.showVwap;
+    if (this.vwap.length > 0) {
+      this.vwapSeries.applyOptions({ visible: this.showVwap });
+    }
+  }
+
   // Public method to update data from parent
   updateData(candles: Candle[]): void {
     this.candles = candles;
     this.updateChart();
+  }
+
+  // Public method to update indicator data from parent
+  updateIndicators(
+    ema9: EmaDto[],
+    ema21: EmaDto[],
+    ema50: EmaDto[],
+    bollingerBands: BollingerBandsDto[],
+    vwap: VwapDto[]
+  ): void {
+    this.ema9 = ema9;
+    this.ema21 = ema21;
+    this.ema50 = ema50;
+    this.bollingerBands = bollingerBands;
+    this.vwap = vwap;
+    this.updateIndicatorSeries();
   }
 }

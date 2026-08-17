@@ -38,3 +38,108 @@ export const TIMEFRAME_LABELS: Record<Timeframe, string> = {
   '4h': '4 Hours',
   '1d': '1 Day'
 };
+
+// Technical Analysis Models
+export interface SmaDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface EmaDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface RsiDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface MacdDto {
+  timestamp: number;
+  macd: number;
+  signal: number;
+  histogram: number;
+}
+
+export interface BollingerBandsDto {
+  timestamp: number;
+  upper: number;
+  middle: number;
+  lower: number;
+  percentB: number;
+  bandwidth: number;
+}
+
+export interface AtrDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface StochasticDto {
+  timestamp: number;
+  k: number;
+  d: number;
+}
+
+export interface AdxDto {
+  timestamp: number;
+  adx: number;
+  plusDi: number;
+  minusDi: number;
+}
+
+export interface ObvDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface VwapDto {
+  timestamp: number;
+  value: number;
+}
+
+export interface IndicatorsResponse {
+  symbol: string;
+  timeframe: string;
+  sma20: SmaDto[];
+  sma50: SmaDto[];
+  sma200: SmaDto[];
+  ema9: EmaDto[];
+  ema21: EmaDto[];
+  ema50: EmaDto[];
+  rsi14: RsiDto[];
+  macd: MacdDto[];
+  bollingerBands20: BollingerBandsDto[];
+  atr14: AtrDto[];
+  stochastic14: StochasticDto[];
+  adx14: AdxDto[];
+  obv: ObvDto[];
+  vwap: VwapDto[];
+}
+
+// Signal Models
+export interface SignalDto {
+  symbol: string;
+  timeframe: string;
+  type: string;
+  direction: string;
+  confidence: number;
+  entryPrice: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  strategy: string;
+  reason: string;
+  metadata: Record<string, any>;
+  timestamp: number;
+}
+
+export interface SignalSummaryDto {
+  symbol: string;
+  timeframe: string;
+  overallScore: number;
+  overallDirection: string;
+  signals: SignalDto[];
+  strategyScores: Record<string, number>;
+  timestamp: number;
+}
