@@ -57,6 +57,12 @@ builder.Services.AddScoped<ITechnicalAnalysisService, TechnicalAnalysisService>(
 // Register Signal Generation Services
 builder.Services.AddScoped<ISignalGenerationService, SignalGenerationService>();
 
+// Register Pattern Recognition Services
+builder.Services.AddScoped<IPatternRecognitionService, PatternRecognitionService>();
+
+// Register Smart Money Concepts Services
+builder.Services.AddScoped<ISmartMoneyConceptsService, SmartMoneyConceptsService>();
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
