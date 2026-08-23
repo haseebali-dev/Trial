@@ -143,3 +143,55 @@ export interface SignalSummaryDto {
   strategyScores: Record<string, number>;
   timestamp: number;
 }
+
+// Scanner Models
+export interface ScanResultDto {
+  symbol: string;
+  timeframe: string;
+  overallScore: number;
+  overallDirection: string;
+  signalCount: number;
+  trendFollowingScore: number;
+  meanReversionScore: number;
+  breakoutScore: number;
+  momentumScore: number;
+  smcScore: number;
+  patternScore: number;
+  topSignalType: string;
+  topSignalDirection: string;
+  topSignalConfidence: number;
+  timestamp: number;
+}
+
+export interface ScannerSummaryDto {
+  totalSymbolsScanned: number;
+  bullishSymbols: number;
+  bearishSymbols: number;
+  neutralSymbols: number;
+  topOpportunities: ScanResultDto[];
+  topRisks: ScanResultDto[];
+  scanTimestamp: number;
+  scanDuration: number;
+}
+
+export interface ScanRequestDto {
+  symbols?: string[];
+  timeframes?: string[];
+  minimumScore?: number;
+  maxConcurrentScans?: number;
+}
+
+export interface SymbolScanDetailsDto {
+  symbol: string;
+  timeframe: string;
+  scanResult: ScanResultDto;
+  signals: SignalSummaryDto;
+  smcAnalysis: any;
+  patterns: any;
+  indicators: any;
+  ticker: any;
+}
+
+export interface ScannerStatusDto {
+  isScanning: boolean;
+}

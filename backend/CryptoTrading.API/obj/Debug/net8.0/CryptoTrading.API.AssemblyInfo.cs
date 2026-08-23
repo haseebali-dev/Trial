@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CryptoTrading.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dec36098780aaf10b9af5479d53098c271a102b9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a87da4c24dccaf7c77fd16f31ccdd3f6b02d1232")]
 [assembly: System.Reflection.AssemblyProductAttribute("CryptoTrading.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CryptoTrading.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

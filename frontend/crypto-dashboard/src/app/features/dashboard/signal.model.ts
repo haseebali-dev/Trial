@@ -1,3 +1,28 @@
+export interface SignalDto {
+  symbol: string;
+  timeframe: string;
+  type: string;
+  direction: string;
+  confidence: number;
+  entryPrice: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  strategy: string;
+  reason: string;
+  metadata: Record<string, any>;
+  timestamp: number;
+}
+
+export interface SignalSummaryDto {
+  symbol: string;
+  timeframe: string;
+  overallScore: number;
+  overallDirection: string;
+  signals: SignalDto[];
+  strategyScores: Record<string, number>;
+  timestamp: number;
+}
+
 export interface Signal {
   id: number;
   symbol: string;

@@ -63,9 +63,40 @@ builder.Services.AddScoped<IPatternRecognitionService, PatternRecognitionService
 // Register Smart Money Concepts Services
 builder.Services.AddScoped<ISmartMoneyConceptsService, SmartMoneyConceptsService>();
 
+// Register Scanner Services
+builder.Services.AddScoped<IScannerService, ScannerService>();
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Crypto Trading API",
+        Version = "v1",
+        Description = "API for Crypto Trading Intelligence Platform - Market Data, Technical Analysis, Signals, AI Analysis, Scanner, Backtesting, and more",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "Crypto Trading API",
+            Email = "support@cryptotrading.api"
+        }
+    });
+
+    // Include XML comments if available
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
+
+    // Add server information
+    c.AddServer(new Microsoft.OpenApi.Models.OpenApiServer
+    {
+        Url = "http://localhost:5003",
+        Description = "Development Server"
+    });
+});
 
 // Add global error handling
 builder.Services.AddProblemDetails();

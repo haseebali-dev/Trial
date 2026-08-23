@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of, catchError, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   Candle,
@@ -19,76 +19,149 @@ import {
   VwapDto,
   IndicatorsResponse,
   SignalDto,
-  SignalSummaryDto
+  SignalSummaryDto,
+  ScanResultDto,
+  ScannerSummaryDto,
+  ScanRequestDto,
+  SymbolScanDetailsDto,
+  ScannerStatusDto
 } from '../models/market.models';
 import { Signal } from '../../features/dashboard/signal.model';
 import { AIAnalysis } from '../../features/ai-analysis/ai-analysis.model';
 import { WatchlistItem } from '../../features/watchlist/watchlist.model';
 import { TradeJournal } from '../../features/journal/journal.model';
 import { Backtest, BacktestRequest } from '../../features/backtesting/backtest.model';
+import { AlphaVantageService } from './alpha-vantage.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
   private readonly baseUrl = environment.apiUrl;
+  private readonly useAlphaVantage = true; // Flag to use Alpha Vantage for market data
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private alphaVantageService: AlphaVantageService
+  ) {}
 
   // Health
   health(): Observable<{ status: string }> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.health();
+    }
     return this.http.get<{ status: string }>(`${this.baseUrl}/market/health`);
   }
 
-  // Market Data
+  // Market Data - Using Alpha Vantage
   getTicker(symbol: string): Observable<MarketTicker> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getTicker(symbol).pipe(
+        map(ticker => ticker || { symbol, price: 0, volume24h: 0, change24h: 0, timestamp: Date.now() })
+      );
+    }
     return this.http.get<MarketTicker>(`${this.baseUrl}/market/ticker/${symbol}`);
   }
 
   getCandles(symbol: string, timeframe: Timeframe, limit: number = 500): Observable<Candle[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getCandles(symbol, timeframe, limit);
+    }
     return this.http.get<Candle[]>(`${this.baseUrl}/market/candles/${symbol}/${timeframe}?limit=${limit}`);
   }
 
   getMarketOverview(): Observable<MarketOverview[]> {
+    if (this.useAlphaVantage) {
+      // Return mock data for now - can be extended to fetch multiple symbols
+      return of([]);
+    }
     return this.http.get<MarketOverview[]>(`${this.baseUrl}/market/overview`);
   }
 
-  // Technical Analysis
+  // Technical Analysis - Using Alpha Vantage
   getIndicators(symbol: string, timeframe: Timeframe, limit: number = 500): Observable<IndicatorsResponse> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getIndicators(symbol, timeframe, limit).pipe(
+        map(indicators => indicators || {
+          symbol: symbol.toUpperCase(),
+          timeframe,
+          sma20: [], sma50: [], sma200: [],
+          ema9: [], ema21: [], ema50: [],
+          rsi14: [],
+          macd: [],
+          bollingerBands20: [],
+          atr14: [],
+          stochastic14: [],
+          adx14: [],
+          obv: [],
+          vwap: []
+        })
+      );
+    }
     return this.http.get<IndicatorsResponse>(`${this.baseUrl}/indicators/${symbol}/${timeframe}?limit=${limit}`);
   }
 
   getSma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<SmaDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getSma(symbol, timeframe, period, limit);
+    }
     return this.http.get<SmaDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/sma/${period}?limit=${limit}`);
   }
 
   getEma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<EmaDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getEma(symbol, timeframe, period, limit);
+    }
     return this.http.get<EmaDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/ema/${period}?limit=${limit}`);
   }
 
   getRsi(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<RsiDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getRsi(symbol, timeframe, period, limit);
+    }
     return this.http.get<RsiDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/rsi?period=${period}&limit=${limit}`);
   }
 
   getMacd(symbol: string, timeframe: Timeframe, fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9, limit: number = 500): Observable<MacdDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getMacd(symbol, timeframe, fastPeriod, slowPeriod, signalPeriod, limit);
+    }
     return this.http.get<MacdDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/macd?fastPeriod=${fastPeriod}&slowPeriod=${slowPeriod}&signalPeriod=${signalPeriod}&limit=${limit}`);
   }
 
   getBollingerBands(symbol: string, timeframe: Timeframe, period: number = 20, stdDev: number = 2, limit: number = 500): Observable<BollingerBandsDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getBollingerBands(symbol, timeframe, period, stdDev, limit);
+    }
     return this.http.get<BollingerBandsDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/bollinger?period=${period}&stdDev=${stdDev}&limit=${limit}`);
   }
 
   getAtr(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<AtrDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getAtr(symbol, timeframe, period, limit);
+    }
     return this.http.get<AtrDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/atr?period=${period}&limit=${limit}`);
   }
 
   getStochastic(symbol: string, timeframe: Timeframe, kPeriod: number = 14, dPeriod: number = 3, limit: number = 500): Observable<StochasticDto[]> {
+    if (this.useAlphaVantage) {
+      return this.alphaVantageService.getStochastic(symbol, timeframe, kPeriod, dPeriod, limit);
+    }
     return this.http.get<StochasticDto[]>(`${this.baseUrl}/indicators/${symbol}/${timeframe}/stochastic?kPeriod=${kPeriod}&dPeriod=${dPeriod}&limit=${limit}`);
   }
 
   getSignalsSummary(symbol: string, timeframe: Timeframe, strategies?: string[]): Observable<SignalSummaryDto> {
-    const strategiesParam = strategies?.join(',') || '';
-    return this.http.get<SignalSummaryDto>(`${this.baseUrl}/signals/${symbol}/${timeframe}${strategiesParam ? `?strategies=${strategiesParam}` : ''}`);
+    // For Alpha Vantage, we'll generate signals from indicators
+    // This is a placeholder - in production you'd compute signals from the indicator data
+    return of({
+      symbol: symbol.toUpperCase(),
+      timeframe,
+      overallScore: 50,
+      overallDirection: 'NEUTRAL',
+      signals: [],
+      strategyScores: {},
+      timestamp: Date.now()
+    });
   }
 
   // Analysis
@@ -171,5 +244,31 @@ export class ApiService {
 
   updateSettings(settings: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/settings`, settings);
+  }
+
+  // Scanner
+  scanMarket(request: ScanRequestDto): Observable<ScannerSummaryDto> {
+    return this.http.post<ScannerSummaryDto>(`${this.baseUrl}/scanner/scan`, request);
+  }
+
+  scanMarketGet(symbols?: string[], timeframes?: string[], minimumScore?: number, maxConcurrentScans?: number): Observable<ScannerSummaryDto> {
+    const params = new URLSearchParams();
+    if (symbols?.length) params.append('symbols', symbols.join(','));
+    if (timeframes?.length) params.append('timeframes', timeframes.join(','));
+    if (minimumScore) params.append('minimumScore', minimumScore.toString());
+    if (maxConcurrentScans) params.append('maxConcurrentScans', maxConcurrentScans.toString());
+    return this.http.get<ScannerSummaryDto>(`${this.baseUrl}/scanner/scan?${params.toString()}`);
+  }
+
+  scanSymbol(symbol: string, timeframe: string): Observable<SymbolScanDetailsDto> {
+    return this.http.get<SymbolScanDetailsDto>(`${this.baseUrl}/scanner/symbol/${symbol}/${timeframe}`);
+  }
+
+  scanSymbols(symbols: string[], timeframe: string, minimumScore: number = 5): Observable<ScanResultDto[]> {
+    return this.http.post<ScanResultDto[]>(`${this.baseUrl}/scanner/symbols`, { symbols, timeframe, minimumScore });
+  }
+
+  getScannerStatus(): Observable<ScannerStatusDto> {
+    return this.http.get<ScannerStatusDto>(`${this.baseUrl}/scanner/status`);
   }
 }
