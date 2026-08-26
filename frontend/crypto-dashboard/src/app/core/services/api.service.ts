@@ -38,7 +38,7 @@ import { AlphaVantageService } from './alpha-vantage.service';
 })
 export class ApiService {
   private readonly baseUrl = environment.apiUrl;
-  private readonly useAlphaVantage = true; // Flag to use Alpha Vantage for market data
+  private readonly useAlphaVantage = false; // Flag to use Alpha Vantage for market data
 
   constructor(
     private http: HttpClient,
@@ -151,17 +151,15 @@ export class ApiService {
   }
 
   getSignalsSummary(symbol: string, timeframe: Timeframe, strategies?: string[]): Observable<SignalSummaryDto> {
-    // For Alpha Vantage, we'll generate signals from indicators
-    // This is a placeholder - in production you'd compute signals from the indicator data
-    return of({
-      symbol: symbol.toUpperCase(),
-      timeframe,
-      overallScore: 50,
-      overallDirection: 'NEUTRAL',
-      signals: [],
-      strategyScores: {},
-      timestamp: Date.now()
-    });
+    const params = new URLSearchParams();
+    if (strategies?.length) {
+      params.append('strategies', strategies.join(','));
+    }
+    return this.http.get<SignalSummaryDto>(`${this.baseUrl}/signals/${symbol}/${timeframe}?${params.toString()}`);
+  }
+
+  getMarketBias(symbol: string, timeframe: Timeframe): Observable<{ direction: string; strength: number; reasons: string[] }> {
+    return this.http.get<{ direction: string; strength: number; reasons: string[] }>(`${this.baseUrl}/smc/${symbol}/${timeframe}/bias`);
   }
 
   // Analysis

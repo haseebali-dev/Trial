@@ -116,4 +116,20 @@ public class SmartMoneyConceptsController : ControllerBase
             return StatusCode(503, new { success = false, message = ex.Message });
         }
     }
+
+    [HttpGet("{symbol}/{timeframe}/bias")]
+    public async Task<ActionResult<MarketBiasDto>> GetMarketBias(
+        string symbol,
+        string timeframe)
+    {
+        try
+        {
+            var bias = await _smcService.GetMarketBiasAsync(symbol, timeframe);
+            return Ok(bias);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(503, new { success = false, message = ex.Message });
+        }
+    }
 }

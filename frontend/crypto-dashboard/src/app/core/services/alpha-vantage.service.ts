@@ -66,6 +66,7 @@ interface AlphaVantageTimeSeries {
   'Technical Analysis: VWAP'?: Record<string, { VWAP: string }>;
   'Note'?: string;
   'Error Message'?: string;
+  [key: string]: unknown;
 }
 
 @Injectable({
@@ -265,7 +266,7 @@ export class AlphaVantageService {
           ? 'Time Series (Daily)'
           : `Time Series (${tfConfig.interval})`;
 
-        const timeSeries = response[timeSeriesKey];
+        const timeSeries = response[timeSeriesKey] as Record<string, Record<string, string>>;
         if (!timeSeries || Object.keys(timeSeries).length === 0) {
           console.warn('Alpha Vantage returned empty time series, using mock data');
           return this.generateMockCandles(symbol, timeframe, limit);
@@ -293,17 +294,17 @@ export class AlphaVantageService {
   // Get technical indicators
   getSma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<SmaDto[]> {
     return this.getIndicator('SMA', symbol, timeframe, { time_period: period.toString() }, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d.value }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d['value'] }))));
   }
 
   getEma(symbol: string, timeframe: Timeframe, period: number, limit: number = 500): Observable<EmaDto[]> {
     return this.getIndicator('EMA', symbol, timeframe, { time_period: period.toString() }, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d.value }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d['value'] }))));
   }
 
   getRsi(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<RsiDto[]> {
     return this.getIndicator('RSI', symbol, timeframe, { time_period: period.toString() }, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d.value }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d['value'] }))));
   }
 
   getMacd(symbol: string, timeframe: Timeframe, fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9, limit: number = 500): Observable<MacdDto[]> {
@@ -313,9 +314,9 @@ export class AlphaVantageService {
       signalperiod: signalPeriod.toString()
     }, limit).pipe(map(data => data.map(d => ({
       timestamp: d.timestamp,
-      macd: d.macd,
-      signal: d.signal,
-      histogram: d.histogram
+      macd: d['macd'],
+      signal: d['signal'],
+      histogram: d['histogram']
     }))));
   }
 
@@ -326,17 +327,17 @@ export class AlphaVantageService {
       nbdevdn: stdDev.toString()
     }, limit).pipe(map(data => data.map(d => ({
       timestamp: d.timestamp,
-      upper: d.upper,
-      middle: d.middle,
-      lower: d.lower,
-      percentB: d.percentB,
-      bandwidth: d.bandwidth
+      upper: d['upper'],
+      middle: d['middle'],
+      lower: d['lower'],
+      percentB: d['percentB'],
+      bandwidth: d['bandwidth']
     }))));
   }
 
   getAtr(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<AtrDto[]> {
     return this.getIndicator('ATR', symbol, timeframe, { time_period: period.toString() }, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d.value }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d['value'] }))));
   }
 
   getStochastic(symbol: string, timeframe: Timeframe, kPeriod: number = 14, dPeriod: number = 3, limit: number = 500): Observable<StochasticDto[]> {
@@ -344,17 +345,17 @@ export class AlphaVantageService {
       fastkperiod: kPeriod.toString(),
       slowkperiod: dPeriod.toString(),
       slowdperiod: dPeriod.toString()
-    }, limit).pipe(map(data => data.map(d => ({ timestamp: d.timestamp, k: d.k, d: d.d }))));
+    }, limit).pipe(map(data => data.map(d => ({ timestamp: d.timestamp, k: d['k'], d: d['d'] }))));
   }
 
   getAdx(symbol: string, timeframe: Timeframe, period: number = 14, limit: number = 500): Observable<AdxDto[]> {
     return this.getIndicator('ADX', symbol, timeframe, { time_period: period.toString() }, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, adx: d.adx, plusDi: d.plusDi, minusDi: d.minusDi }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, adx: d['adx'], plusDi: d['plusDi'], minusDi: d['minusDi'] }))));
   }
 
   getObv(symbol: string, timeframe: Timeframe, limit: number = 500): Observable<ObvDto[]> {
     return this.getIndicator('OBV', symbol, timeframe, {}, limit)
-      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d.value }))));
+      .pipe(map(data => data.map(d => ({ timestamp: d.timestamp, value: d['value'] }))));
   }
 
   getVwap(symbol: string, timeframe: Timeframe, limit: number = 500): Observable<VwapDto[]> {
@@ -385,9 +386,13 @@ export class AlphaVantageService {
     return this.http.get<AlphaVantageTimeSeries>(this.baseUrl, { params }).pipe(
       map(response => {
         const key = Object.keys(response).find(k => k.startsWith('Technical Analysis'));
-        if (!key || !response[key]) return [];
+        if (!key) return [];
 
-        return Object.entries(response[key]!)
+        const responseRecord = response as unknown as Record<string, Record<string, Record<string, string>>>;
+        const indicatorData = responseRecord[key];
+        if (!indicatorData) return [];
+
+        return Object.entries(indicatorData)
           .slice(0, limit)
           .map(([timestamp, data]) => {
             const result: { timestamp: number; [key: string]: any } = {

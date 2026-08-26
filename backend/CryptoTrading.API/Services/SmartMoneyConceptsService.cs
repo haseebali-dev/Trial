@@ -917,4 +917,145 @@ public class SmartMoneyConceptsService : ISmartMoneyConceptsService
     }
 
     #endregion
+
+    #region Market Bias
+
+    public async Task<MarketBiasDto> GetMarketBiasAsync(string symbol, string timeframe)
+    {
+        try
+        {
+            var analysis = await GetSmcAnalysisAsync(symbol, timeframe);
+            var indicators = await _marketDataService.GetCandlesAsync(symbol, timeframe, 50);
+
+            var currentPrice = analysis.CurrentPrice;
+            var structure = analysis.CurrentStructure;
+            var reasons = new List<string>();
+
+            // Determine bias based on market structure
+            string direction = "NEUTRAL";
+            int strength = 0;
+
+            switch (structure)
+            {
+                case MarketStructure.Bullish:
+                    direction = "BULLISH";
+                    strength = 70;
+                    reasons.Add("Market structure is bullish (higher highs, higher lows)");
+                    break;
+                case MarketStructure.Bearish:
+                    direction = "BEARISH";
+                    strength = 70;
+                    reasons.Add("Market structure is bearish (lower highs, lower lows)");
+                    break;
+                case MarketStructure.Ranging:
+                    direction = "NEUTRAL";
+                    strength = 30;
+                    reasons.Add("Market is ranging (no clear structure)");
+                    break;
+            }
+
+            // Check premium/discount zone
+            if (analysis.PremiumDiscountZone != null)
+            {
+                var zone = analysis.PremiumDiscountZone;
+                if (zone.Type == ZoneType.Premium)
+                {
+                    reasons.Add("Price in Premium zone - favorable for selling");
+                    if (direction == "BULLISH") strength -= 15;
+                    else if (direction == "BEARISH") strength += 15;
+                }
+                else if (zone.Type == ZoneType.Discount)
+                {
+                    reasons.Add("Price in Discount zone - favorable for buying");
+                    if (direction == "BULLISH") strength += 15;
+                    else if (direction == "BEARISH") strength -= 15;
+                }
+            }
+
+            // Check for active order blocks near current price
+            var activeOrderBlocks = analysis.OrderBlocks.Where(ob => !ob.IsMitigated && ob.Strength >= 60).ToList();
+            if (activeOrderBlocks.Any())
+            {
+                var bullishOB = activeOrderBlocks.FirstOrDefault(ob => ob.Type == OrderBlockType.Bullish);
+                var bearishOB = activeOrderBlocks.FirstOrDefault(ob => ob.Type == OrderBlockType.Bearish);
+
+                if (bullishOB != null && currentPrice <= bullishOB.HighPrice * 1.02m)
+                {
+                    direction = "BULLISH";
+                    strength = Math.Min(90, strength + 20);
+                    reasons.Add($"Price near bullish order block (strength: {bullishOB.Strength})");
+                }
+                else if (bearishOB != null && currentPrice >= bearishOB.LowPrice * 0.98m)
+                {
+                    direction = "BEARISH";
+                    strength = Math.Min(90, strength + 20);
+                    reasons.Add($"Price near bearish order block (strength: {bearishOB.Strength})");
+                }
+            }
+
+            // Check for unfilled FVGs
+            var unfilledFVGs = analysis.FairValueGaps.Where(fvg => !fvg.IsFilled).ToList();
+            if (unfilledFVGs.Any())
+            {
+                var bullishFVG = unfilledFVGs.FirstOrDefault(fvg => fvg.Type == OrderBlockType.Bullish);
+                var bearishFVG = unfilledFVGs.FirstOrDefault(fvg => fvg.Type == OrderBlockType.Bearish);
+
+                if (bullishFVG != null && currentPrice <= bullishFVG.TopPrice * 1.01m)
+                {
+                    if (direction != "BEARISH") direction = "BULLISH";
+                    strength = Math.Min(85, strength + 15);
+                    reasons.Add($"Bullish FVG nearby (gap: {Math.Round(bullishFVG.GapSize, 2)})");
+                }
+                else if (bearishFVG != null && currentPrice >= bearishFVG.BottomPrice * 0.99m)
+                {
+                    if (direction != "BULLISH") direction = "BEARISH";
+                    strength = Math.Min(85, strength + 15);
+                    reasons.Add($"Bearish FVG nearby (gap: {Math.Round(bearishFVG.GapSize, 2)})");
+                }
+            }
+
+            // Check structure breaks
+            var recentBreaks = analysis.StructureBreaks.Take(2).ToList();
+            foreach (var sb in recentBreaks)
+            {
+                if (sb.Type == StructureBreakType.CHoCH)
+                {
+                    if (sb.NewStructure == MarketStructure.Bullish)
+                    {
+                        direction = "BULLISH";
+                        strength = Math.Min(85, strength + 15);
+                        reasons.Add("Bullish Change of Character detected");
+                    }
+                    else if (sb.NewStructure == MarketStructure.Bearish)
+                    {
+                        direction = "BEARISH";
+                        strength = Math.Min(85, strength + 15);
+                        reasons.Add("Bearish Change of Character detected");
+                    }
+                }
+            }
+
+            // Clamp strength
+            strength = Math.Clamp(strength, 0, 100);
+
+            return new MarketBiasDto
+            {
+                Direction = direction,
+                Strength = strength,
+                Reasons = reasons.ToArray()
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting market bias for {Symbol} {Timeframe}", symbol, timeframe);
+            return new MarketBiasDto
+            {
+                Direction = "NEUTRAL",
+                Strength = 0,
+                Reasons = new[] { "Error calculating bias" }
+            };
+        }
+    }
+
+    #endregion
 }

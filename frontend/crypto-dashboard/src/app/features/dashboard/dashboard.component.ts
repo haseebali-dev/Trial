@@ -1,7 +1,9 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription, interval, forkJoin, catchError, of, map } from 'rxjs';
+import { Subscription, interval, forkJoin, catchError, of, map, takeUntil } from 'rxjs';
+import { Subject } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { BinanceWebsocketService } from '../../core/services/binance-websocket.service';
 import { Signal, SignalSummaryDto } from './signal.model';
 import { ChartComponent } from '../market/components/chart.component';
 import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, IndicatorsResponse } from '../../core/models/market.models';
@@ -16,7 +18,11 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
         <h1>Crypto Trading Intelligence</h1>
         <div class="connection-status" [class.connected]="isConnected">
           <span class="status-dot"></span>
-          <span>{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
+          <span>{{ isConnected ? 'API Connected' : 'API Disconnected' }}</span>
+        </div>
+        <div class="ws-status" [class.connected]="wsConnected">
+          <span class="status-dot"></span>
+          <span>{{ wsConnected ? 'Live Data' : 'Offline' }}</span>
         </div>
       </div>
 
@@ -48,6 +54,7 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
             <div class="bias-item" *ngFor="let bias of marketBias">
               <span class="timeframe">{{ bias.timeframe }}</span>
               <span class="direction" [class]="bias.direction.toLowerCase()">{{ bias.direction }}</span>
+              <span class="strength" *ngIf="bias.strength !== undefined">({{ bias.strength }}%)</span>
             </div>
           </div>
 
@@ -145,6 +152,13 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
       font-size: 0.875rem;
     }
 
+    .ws-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+    }
+
     .status-dot {
       width: 8px;
       height: 8px;
@@ -152,7 +166,8 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
       background: #e53e3e;
     }
 
-    .connection-status.connected .status-dot {
+    .connection-status.connected .status-dot,
+    .ws-status.connected .status-dot {
       background: #48bb78;
     }
 
@@ -170,7 +185,8 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
       border-radius: 8px;
       border: 1px solid #2a2e39;
       overflow: hidden;
-      min-height: 0;
+      min-height: 500px;
+      height: 100%;
     }
 
     .side-panel {
@@ -220,6 +236,12 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
 
     .direction.neutral {
       color: #f6ad55;
+    }
+
+    .strength {
+      color: #787b86;
+      font-size: 0.75rem;
+      margin-left: 8px;
     }
 
     .signal-display {
@@ -353,11 +375,14 @@ import { Candle, MarketTicker, Timeframe, EmaDto, BollingerBandsDto, VwapDto, In
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  @ViewChild(ChartComponent) chartComponent!: ChartComponent;
+
   isConnected = false;
+  wsConnected = false;
   symbol = 'BTCUSDT';
   currentTimeframe: Timeframe = '1h';
 
-  marketBias: Array<{ timeframe: string; direction: string }> = [
+  marketBias: Array<{ timeframe: string; direction: string; strength?: number }> = [
     { timeframe: '1H', direction: 'NEUTRAL' },
     { timeframe: '4H', direction: 'NEUTRAL' },
     { timeframe: '1D', direction: 'NEUTRAL' }
@@ -376,25 +401,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loading = false;
   error: string | null = null;
 
+  private destroy$ = new Subject<void>();
   private healthCheckSubscription?: Subscription;
   private refreshSubscription?: Subscription;
 
-  constructor(private apiService: ApiService) {}
+  constructor(
+    private apiService: ApiService,
+    private binanceWs: BinanceWebsocketService
+  ) {}
 
   ngOnInit(): void {
     this.checkHealth();
     this.healthCheckSubscription = interval(30000).subscribe(() => this.checkHealth());
     this.loadMarketData();
 
-    // Auto-refresh every 30 seconds
-    this.refreshSubscription = interval(30000).subscribe(() => {
+    // Connect to Binance WebSocket for real-time data
+    this.connectWebSocket();
+
+    // Auto-refresh every 30 seconds (for indicators, signals, bias)
+    this.refreshSubscription = interval(30000).pipe(takeUntil(this.destroy$)).subscribe(() => {
       if (!this.loading) this.loadMarketData();
     });
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     this.healthCheckSubscription?.unsubscribe();
     this.refreshSubscription?.unsubscribe();
+    this.binanceWs.disconnect();
   }
 
   checkHealth(): void {
@@ -404,11 +439,72 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  private connectWebSocket(): void {
+    this.binanceWs.connect(this.symbol, this.currentTimeframe);
+
+    this.binanceWs.connectionStatus$.pipe(takeUntil(this.destroy$)).subscribe(status => {
+      this.wsConnected = status === 'connected';
+    });
+
+    // Real-time candle updates
+    this.binanceWs.candle$.pipe(takeUntil(this.destroy$)).subscribe(candle => {
+      if (candle && this.chartComponent) {
+        // Update the last candle in real-time
+        this.updateLastCandle(candle);
+      }
+    });
+
+    // Closed candles - refresh indicators
+    this.binanceWs.candleClosed$.pipe(takeUntil(this.destroy$)).subscribe(candle => {
+      console.log('[Dashboard] Candle closed, refreshing data');
+      this.loadMarketData();
+    });
+
+    // Real-time ticker updates
+    this.binanceWs.ticker$.pipe(takeUntil(this.destroy$)).subscribe(ticker => {
+      if (ticker && this.ticker) {
+        this.ticker = {
+          ...this.ticker,
+          price: ticker.price,
+          change24h: ticker.change24h,
+          volume24h: ticker.volume24h,
+          high24h: ticker.high24h,
+          low24h: ticker.low24h,
+          open24h: ticker.open24h
+        };
+      }
+    });
+  }
+
+  private updateLastCandle(candle: Candle): void {
+    if (this.candles.length > 0) {
+      const lastIndex = this.candles.length - 1;
+      const lastCandleTime = this.candles[lastIndex].timestamp;
+
+      // If same timestamp, update the last candle
+      if (lastCandleTime === candle.timestamp) {
+        this.candles[lastIndex] = { ...candle };
+      } else if (candle.timestamp > lastCandleTime) {
+        // New candle started - add it
+        this.candles.push({ ...candle });
+        // Keep max 500 candles
+        if (this.candles.length > 500) {
+          this.candles.shift();
+        }
+      }
+
+      // Update chart
+      if (this.chartComponent) {
+        this.chartComponent.updateData([...this.candles]);
+      }
+    }
+  }
+
   loadMarketData(): void {
     this.loading = true;
     this.error = null;
 
-    // Load ticker, candles, and indicators in parallel
+    // Load ticker, candles, indicators, signals, and market bias in parallel
     forkJoin({
       ticker: this.apiService.getTicker(this.symbol).pipe(
         catchError(err => {
@@ -433,8 +529,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
           console.warn('Failed to load signal summary:', err.message);
           return of(null);
         })
+      ),
+      // Load market bias for all timeframes
+      bias1h: this.apiService.getMarketBias(this.symbol, '1h').pipe(
+        catchError(err => {
+          console.warn('Failed to load 1h bias:', err.message);
+          return of({ direction: 'NEUTRAL', strength: 0, reasons: [] });
+        })
+      ),
+      bias4h: this.apiService.getMarketBias(this.symbol, '4h').pipe(
+        catchError(err => {
+          console.warn('Failed to load 4h bias:', err.message);
+          return of({ direction: 'NEUTRAL', strength: 0, reasons: [] });
+        })
+      ),
+      bias1d: this.apiService.getMarketBias(this.symbol, '1d').pipe(
+        catchError(err => {
+          console.warn('Failed to load 1d bias:', err.message);
+          return of({ direction: 'NEUTRAL', strength: 0, reasons: [] });
+        })
       )
-    }).subscribe(({ ticker, candles, indicators, signalsSummary }) => {
+    }).subscribe(({ ticker, candles, indicators, signalsSummary, bias1h, bias4h, bias1d }) => {
       if (ticker) {
         this.ticker = ticker;
       }
@@ -451,6 +566,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       if (signalsSummary) {
         this.currentSignal = this.convertSignalSummary(signalsSummary);
       }
+
+      // Update market bias
+      this.marketBias = [
+        { timeframe: '1H', direction: bias1h.direction, strength: bias1h.strength },
+        { timeframe: '4H', direction: bias4h.direction, strength: bias4h.strength },
+        { timeframe: '1D', direction: bias1d.direction, strength: bias1d.strength }
+      ];
 
       this.loading = false;
     });

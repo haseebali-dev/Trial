@@ -185,6 +185,8 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
   private bbLowerSeries!: ISeriesApi<'Line'>;
   private vwapSeries!: ISeriesApi<'Line'>;
   private crosshairEnabled = true;
+  private resizeObserver!: ResizeObserver;
+  private isDestroyed = false;
 
   ngOnInit(): void {
     this.currentTimeframe = this.timeframe;
@@ -192,7 +194,7 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
 
   ngAfterViewInit(): void {
     this.initializeChart();
-    this.updateChart();
+    // updateChart will be called inside initializeChart after series are created
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -203,10 +205,22 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
       if (changes['timeframe']) {
         this.currentTimeframe = this.timeframe;
       }
+    } else {
+      // Chart not initialized yet, store the changes to apply later
+      if (changes['candles'] && !changes['candles'].firstChange) {
+        this.candles = changes['candles'].currentValue || [];
+      }
+      if (changes['timeframe']) {
+        this.currentTimeframe = changes['timeframe'].currentValue;
+      }
     }
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
     if (this.chart) {
       this.chart.remove();
     }
@@ -373,13 +387,18 @@ export class ChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChang
     });
 
     // Handle container resize
-    const resizeObserver = new ResizeObserver(() => {
-      this.chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight,
-      });
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.chart && !this.isDestroyed) {
+        this.chart.applyOptions({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
+      }
     });
-    resizeObserver.observe(container);
+    this.resizeObserver.observe(container);
+
+    // Load initial data if available
+    this.updateChart();
   }
 
   private updateChart(): void {

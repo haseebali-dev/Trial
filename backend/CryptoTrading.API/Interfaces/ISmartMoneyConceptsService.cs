@@ -10,4 +10,5 @@ public interface ISmartMoneyConceptsService
     Task<IReadOnlyList<LiquidityZoneDto>> GetLiquidityZonesAsync(string symbol, string timeframe, int limit = 500);
     Task<IReadOnlyList<StructureBreakDto>> GetStructureBreaksAsync(string symbol, string timeframe, int limit = 500);
     Task<IReadOnlyList<SmcSignalDto>> GetSmcSignalsAsync(string symbol, string timeframe, int limit = 500);
+    Task<MarketBiasDto> GetMarketBiasAsync(string symbol, string timeframe);
 }

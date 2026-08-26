@@ -6,6 +6,7 @@ using CryptoTrading.API.Middleware;
 using CryptoTrading.API.Interfaces;
 using CryptoTrading.API.MarketData;
 using CryptoTrading.API.Services;
+using CryptoTrading.API.AI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,16 @@ builder.Services.AddScoped<ISmartMoneyConceptsService, SmartMoneyConceptsService
 
 // Register Scanner Services
 builder.Services.AddScoped<IScannerService, ScannerService>();
+
+// Register AI Services
+builder.Services.AddHttpClient<OllamaAIProvider>(client =>
+{
+    var settings = builder.Configuration.GetSection("AI").Get<AISettings>();
+    client.BaseAddress = new Uri(settings?.OllamaBaseUrl ?? "http://localhost:11434");
+    client.Timeout = TimeSpan.FromSeconds(settings?.TimeoutSeconds ?? 120);
+});
+builder.Services.AddScoped<IAIProvider, OllamaAIProvider>();
+builder.Services.AddScoped<IAIConsensusService, AIConsensusService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();

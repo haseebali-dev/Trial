@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { Subject, takeUntil, catchError, of, interval, forkJoin } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { BinanceWebsocketService } from '../../core/services/binance-websocket.service';
 import { ChartComponent } from './components/chart.component';
 import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS, EmaDto, BollingerBandsDto, VwapDto, IndicatorsResponse } from '../../core/models/market.models';
 
@@ -28,7 +29,11 @@ import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS, EmaDto, 
         </div>
         <div class="connection-status" [class.connected]="isConnected">
           <span class="status-dot"></span>
-          <span>{{ isConnected ? 'Live' : 'Offline' }}</span>
+          <span>{{ isConnected ? 'API Connected' : 'API Disconnected' }}</span>
+        </div>
+        <div class="ws-status" [class.connected]="wsConnected">
+          <span class="status-dot"></span>
+          <span>{{ wsConnected ? 'Live Data' : 'Offline' }}</span>
         </div>
       </div>
 
@@ -151,6 +156,17 @@ import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS, EmaDto, 
       font-weight: 500;
     }
 
+    .ws-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #1e222d;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
     .status-dot {
       width: 8px;
       height: 8px;
@@ -158,7 +174,8 @@ import { Candle, MarketTicker, Timeframe, TIMEFRAMES, TIMEFRAME_LABELS, EmaDto, 
       background: #e53e3e;
     }
 
-    .connection-status.connected .status-dot {
+    .connection-status.connected .status-dot,
+    .ws-status.connected .status-dot {
       background: #48bb78;
     }
 
@@ -290,13 +307,15 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
   loading = false;
   error: string | null = null;
   isConnected = false;
+  wsConnected = false;
 
   private destroy$ = new Subject<void>();
   private refreshSubscription?: any;
 
   constructor(
     private route: ActivatedRoute,
-    private apiService: ApiService
+    private apiService: ApiService,
+    private binanceWs: BinanceWebsocketService
   ) {}
 
   ngOnInit(): void {
@@ -305,7 +324,6 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
       const symbol = params.get('symbol');
       if (symbol) {
         this.symbol = symbol.toUpperCase();
-        this.loadData();
       }
     });
 
@@ -325,16 +343,81 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refreshSubscription = interval(10000).pipe(takeUntil(this.destroy$)).subscribe(() => {
       if (!this.loading) this.loadTicker();
     });
+
+    // Connect to Binance WebSocket for real-time data
+    this.connectWebSocket();
+  }
+
+  private connectWebSocket(): void {
+    this.binanceWs.connect(this.symbol, this.currentTimeframe);
+
+    this.binanceWs.connectionStatus$.pipe(takeUntil(this.destroy$)).subscribe(status => {
+      this.wsConnected = status === 'connected';
+    });
+
+    // Real-time candle updates
+    this.binanceWs.candle$.pipe(takeUntil(this.destroy$)).subscribe(candle => {
+      if (candle && this.chartComponent) {
+        this.updateLastCandle(candle);
+      }
+    });
+
+    // Closed candles - refresh indicators and signals
+    this.binanceWs.candleClosed$.pipe(takeUntil(this.destroy$)).subscribe(candle => {
+      console.log('[Market] Candle closed, refreshing data');
+      this.loadData();
+    });
+
+    // Real-time ticker updates
+    this.binanceWs.ticker$.pipe(takeUntil(this.destroy$)).subscribe(ticker => {
+      if (ticker && this.ticker) {
+        this.ticker = {
+          ...this.ticker,
+          price: ticker.price,
+          change24h: ticker.change24h,
+          volume24h: ticker.volume24h,
+          high24h: ticker.high24h,
+          low24h: ticker.low24h,
+          open24h: ticker.open24h
+        };
+      }
+    });
+  }
+
+  private updateLastCandle(candle: Candle): void {
+    if (this.candles.length > 0) {
+      const lastIndex = this.candles.length - 1;
+      const lastCandleTime = this.candles[lastIndex].timestamp;
+
+      // If same timestamp, update the last candle
+      if (lastCandleTime === candle.timestamp) {
+        this.candles[lastIndex] = { ...candle };
+      } else if (candle.timestamp > lastCandleTime) {
+        // New candle started - add it
+        this.candles.push({ ...candle });
+        // Keep max 500 candles
+        if (this.candles.length > 500) {
+          this.candles.shift();
+        }
+      }
+
+      // Update chart component
+      if (this.chartComponent) {
+        this.chartComponent.updateData([...this.candles]);
+      }
+    }
   }
 
   ngAfterViewInit(): void {
-    // Chart is initialized via ViewChild
+    // Chart is now initialized, load data
+    this.loadData();
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     this.refreshSubscription?.unsubscribe();
+    this.binanceWs.disconnect();
   }
 
   checkHealth(): void {
@@ -415,6 +498,7 @@ export class MarketComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onTimeframeChange(timeframe: Timeframe): void {
     this.currentTimeframe = timeframe;
+    this.binanceWs.switchTimeframe(timeframe);
     this.loadData();
   }
 
